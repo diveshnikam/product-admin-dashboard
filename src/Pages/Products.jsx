@@ -10,15 +10,50 @@ import {
 const Products = () => {
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Helper function to keep URL clean
+  const updateUrl = ({
+    page,
+    limit,
+    search = "",
+    category = "",
+    sortBy = "",
+    order = "",
+  }) => {
+    const params = {
+      page,
+      limit,
+    };
+
+    // Add search only when it has a value
+    if (search.trim()) {
+      params.search = search;
+    }
+
+    // Add category only when selected
+    if (category) {
+      params.category = category;
+    }
+
+    // Add sorting only when both values exist
+    if (sortBy && order) {
+      params.sortBy = sortBy;
+      params.order = order;
+    }
+
+    setSearchParams(params);
+  };
+
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Read page, limit, search and category from URL
+  // Read page, limit, search, category and sorting from URL
   const urlPage = Number(searchParams.get("page"));
   const urlLimit = Number(searchParams.get("limit"));
   const urlSearch = searchParams.get("search") || "";
   const urlCategory = searchParams.get("category") || "";
+  const urlSortBy = searchParams.get("sortBy") || "";
+  const urlOrder = searchParams.get("order") || "";
 
   // Validate page
   // Page should be a positive whole number
@@ -28,6 +63,17 @@ const Products = () => {
   // Only 10, 20 and 50 are allowed
   const limitValue = [10, 20, 50].includes(urlLimit) ? urlLimit : 10;
 
+  // Validate sorting
+  // sortBy and order should be a valid pair
+  const validSortBy = ["price", "rating", "title"];
+  const validOrder = ["asc", "desc"];
+
+  const isValidSorting =
+    validSortBy.includes(urlSortBy) && validOrder.includes(urlOrder);
+
+  const sortByValue = isValidSorting ? urlSortBy : "";
+  const orderValue = isValidSorting ? urlOrder : "";
+
   const [page, setPage] = useState(pageValue);
   const [limit, setLimit] = useState(limitValue);
   const [total, setTotal] = useState(0);
@@ -35,8 +81,15 @@ const Products = () => {
   // Categories
   const [categories, setCategories] = useState([]);
 
+  // Used to know when categories are loaded
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
+
   // Selected category
   const [category, setCategory] = useState(urlCategory);
+
+  // Sorting
+  const [sortBy, setSortBy] = useState(sortByValue);
+  const [order, setOrder] = useState(orderValue);
 
   // Which page-number array is currently visible
   const [pageArrayIndex, setPageArrayIndex] = useState(
@@ -55,6 +108,10 @@ const Products = () => {
   // Used to prevent search debounce from resetting
   // the page when the component loads from the URL
   const isFirstSearchRender = useRef(true);
+
+  // Used to identify the latest API request
+  // This prevents old responses from overwriting new results
+  const requestIdRef = useRef(0);
 
   // Debounce search
   useEffect(() => {
@@ -75,12 +132,14 @@ const Products = () => {
       setPage(1);
       setPageArrayIndex(0);
 
-      // Update URL
-      setSearchParams({
+      // Update clean URL
+      updateUrl({
         page: 1,
         limit: limit,
         search: search,
         category: search.trim() ? "" : category,
+        sortBy: sortBy,
+        order: order,
       });
     }, 500);
 
@@ -96,8 +155,68 @@ const Products = () => {
         const response = await getCategories();
 
         setCategories(response);
+
+        // Check whether category from URL is valid
+        const isValidCategory = response.some(
+          (item) => item.slug === urlCategory,
+        );
+
+        // If category exists in URL but is invalid
+        if (urlCategory && !isValidCategory) {
+          setCategory("");
+
+          // If category is invalid, allow search from URL
+          if (urlSearch) {
+            setSearch(urlSearch);
+            setDebouncedSearch(urlSearch);
+          }
+
+          // Update URL without invalid category
+          updateUrl({
+            page: pageValue,
+            limit: limitValue,
+            search: urlSearch,
+            category: "",
+            sortBy: sortByValue,
+            order: orderValue,
+          });
+        }
+
+        // If both search and category exist,
+        // category gets priority
+        if (urlCategory && isValidCategory && urlSearch) {
+          setSearch("");
+          setDebouncedSearch("");
+
+          // Remove search from URL
+          updateUrl({
+            page: pageValue,
+            limit: limitValue,
+            search: "",
+            category: urlCategory,
+            sortBy: sortByValue,
+            order: orderValue,
+          });
+        }
+
+        // If sorting is invalid, clean it from URL
+        if ((urlSortBy || urlOrder) && !isValidSorting) {
+          setSortBy("");
+          setOrder("");
+
+          updateUrl({
+            page: pageValue,
+            limit: limitValue,
+            search:
+              urlCategory && isValidCategory ? "" : urlSearch,
+            category: isValidCategory ? urlCategory : "",
+          });
+        }
+
+        setCategoriesLoaded(true);
       } catch (err) {
         console.log(err);
+        setCategoriesLoaded(true);
       }
     };
 
@@ -105,6 +224,10 @@ const Products = () => {
   }, []);
 
   const fetchProducts = async () => {
+    // Create a unique ID for this request
+    // Every new request gets a new ID
+    const requestId = ++requestIdRef.current;
+
     try {
       setLoading(true);
       setError("");
@@ -113,27 +236,38 @@ const Products = () => {
       // Math.max ensures skip never becomes negative
       const skip = Math.max(0, (page - 1) * limit);
 
+      // Common pagination and sorting parameters
+      const params = {
+        limit: limit,
+        skip: skip,
+      };
+
+      // Add sorting parameters only when sorting is selected
+      if (sortBy && order) {
+        params.sortBy = sortBy;
+        params.order = order;
+      }
+
       let response;
 
       // Category has priority when selected
       if (category) {
-        response = await getProductsByCategory(category, {
-          limit: limit,
-          skip: skip,
-        });
+        response = await getProductsByCategory(category, params);
       } else if (debouncedSearch.trim()) {
         // Search when no category is selected
         response = await searchProducts({
           q: debouncedSearch,
-          limit: limit,
-          skip: skip,
+          ...params,
         });
       } else {
         // Get all products when there is no search or category
-        response = await getProducts({
-          limit: limit,
-          skip: skip,
-        });
+        response = await getProducts(params);
+      }
+
+      // If another request started after this request,
+      // ignore this old response
+      if (requestId !== requestIdRef.current) {
+        return;
       }
 
       // Store total products
@@ -150,12 +284,14 @@ const Products = () => {
         // Show the page-number array containing the last page
         setPageArrayIndex(Math.floor((totalPages - 1) / 5));
 
-        // Update URL with valid page
-        setSearchParams({
+        // Update clean URL with valid page
+        updateUrl({
           page: totalPages,
           limit: limit,
           search: debouncedSearch,
           category: category,
+          sortBy: sortBy,
+          order: order,
         });
 
         return;
@@ -164,16 +300,36 @@ const Products = () => {
       // Set products only when page is valid
       setProducts(response.products);
     } catch (err) {
+      // Ignore errors from old requests too
+      if (requestId !== requestIdRef.current) {
+        return;
+      }
+
       setError(err.message || "Failed to load products");
     } finally {
-      setLoading(false);
+      // Only the latest request controls loading state
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
-  // Fetch products whenever page, limit, search or category changes
+  // Fetch products whenever page, limit, search, category or sorting changes
   useEffect(() => {
+    if (!categoriesLoaded) {
+      return;
+    }
+
     fetchProducts();
-  }, [page, limit, debouncedSearch, category]);
+  }, [
+    categoriesLoaded,
+    page,
+    limit,
+    debouncedSearch,
+    category,
+    sortBy,
+    order,
+  ]);
 
   // Category change
   const handleCategoryChange = (e) => {
@@ -190,12 +346,14 @@ const Products = () => {
     setPage(1);
     setPageArrayIndex(0);
 
-    // Update URL
-    setSearchParams({
+    // Update clean URL
+    updateUrl({
       page: 1,
       limit: limit,
       search: "",
       category: selectedCategory,
+      sortBy: sortBy,
+      order: order,
     });
   };
 
@@ -210,6 +368,49 @@ const Products = () => {
     if (value.trim()) {
       setCategory("");
     }
+  };
+
+  // Sorting change
+  const handleSortChange = (e) => {
+    const selectedSort = e.target.value;
+
+    // Default option
+    if (!selectedSort) {
+      setSortBy("");
+      setOrder("");
+      setPage(1);
+      setPageArrayIndex(0);
+
+      // Update URL without sorting
+      updateUrl({
+        page: 1,
+        limit: limit,
+        search: debouncedSearch,
+        category: category,
+      });
+
+      return;
+    }
+
+    // Split value into sortBy and order
+    const [newSortBy, newOrder] = selectedSort.split("-");
+
+    setSortBy(newSortBy);
+    setOrder(newOrder);
+
+    // Start from page 1
+    setPage(1);
+    setPageArrayIndex(0);
+
+    // Update clean URL
+    updateUrl({
+      page: 1,
+      limit: limit,
+      search: debouncedSearch,
+      category: category,
+      sortBy: newSortBy,
+      order: newOrder,
+    });
   };
 
   // Total number of pages
@@ -261,12 +462,14 @@ const Products = () => {
     // Show first page-number array
     setPageArrayIndex(0);
 
-    // Update URL
-    setSearchParams({
+    // Update clean URL
+    updateUrl({
       page: 1,
       limit: newLimit,
       search: debouncedSearch,
       category: category,
+      sortBy: sortBy,
+      order: order,
     });
   };
 
@@ -274,12 +477,14 @@ const Products = () => {
   const handlePageChange = (pageNumber) => {
     setPage(pageNumber);
 
-    // Update URL
-    setSearchParams({
+    // Update clean URL
+    updateUrl({
       page: pageNumber,
       limit: limit,
       search: debouncedSearch,
       category: category,
+      sortBy: sortBy,
+      order: order,
     });
   };
 
@@ -313,6 +518,28 @@ const Products = () => {
               {category.name}
             </option>
           ))}
+        </select>
+      </div>
+
+      {/* Sorting */}
+      <div>
+        <label htmlFor="sort">Sort By: </label>
+
+        <select
+          id="sort"
+          value={sortBy && order ? `${sortBy}-${order}` : ""}
+          onChange={handleSortChange}
+        >
+          <option value="">Default</option>
+
+          <option value="price-asc">Price: Low to High</option>
+          <option value="price-desc">Price: High to Low</option>
+
+          <option value="rating-asc">Rating: Low to High</option>
+          <option value="rating-desc">Rating: High to Low</option>
+
+          <option value="title-asc">Title: A to Z</option>
+          <option value="title-desc">Title: Z to A</option>
         </select>
       </div>
 
