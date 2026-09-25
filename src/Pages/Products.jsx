@@ -1,6 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { getProducts, searchProducts } from "../api/productApi";
+import {
+  getProducts,
+  searchProducts,
+  getCategories,
+  getProductsByCategory,
+} from "../api/productApi";
 
 const Products = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -9,41 +14,62 @@ const Products = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Read page, limit and search from URL
+  // Read page, limit, search and category from URL
   const urlPage = Number(searchParams.get("page"));
   const urlLimit = Number(searchParams.get("limit"));
   const urlSearch = searchParams.get("search") || "";
+  const urlCategory = searchParams.get("category") || "";
 
   // Validate page
   // Page should be a positive whole number
-  const pageValue =
-    urlPage > 0 && Number.isInteger(urlPage) ? urlPage : 1;
+  const pageValue = urlPage > 0 && Number.isInteger(urlPage) ? urlPage : 1;
 
   // Validate limit
   // Only 10, 20 and 50 are allowed
-  const limitValue = [10, 20, 50].includes(urlLimit)
-    ? urlLimit
-    : 10;
+  const limitValue = [10, 20, 50].includes(urlLimit) ? urlLimit : 10;
 
   const [page, setPage] = useState(pageValue);
   const [limit, setLimit] = useState(limitValue);
   const [total, setTotal] = useState(0);
 
+  // Categories
+  const [categories, setCategories] = useState([]);
+
+  // Selected category
+  const [category, setCategory] = useState(urlCategory);
+
   // Which page-number array is currently visible
   const [pageArrayIndex, setPageArrayIndex] = useState(
-    Math.floor((pageValue - 1) / 5)
+    Math.floor((pageValue - 1) / 5),
   );
 
   // Search text
-  const [search, setSearch] = useState(urlSearch);
+  // If category exists in URL, category gets priority
+  const [search, setSearch] = useState(urlCategory ? "" : urlSearch);
 
   // Debounced search text
-  const [debouncedSearch, setDebouncedSearch] = useState(urlSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(
+    urlCategory ? "" : urlSearch,
+  );
+
+  // Used to prevent search debounce from resetting
+  // the page when the component loads from the URL
+  const isFirstSearchRender = useRef(true);
 
   // Debounce search
   useEffect(() => {
+    if (isFirstSearchRender.current) {
+      isFirstSearchRender.current = false;
+      return;
+    }
+
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
+
+      // Search and category are mutually exclusive
+      if (search.trim()) {
+        setCategory("");
+      }
 
       // When search changes, always start from page 1
       setPage(1);
@@ -54,6 +80,7 @@ const Products = () => {
         page: 1,
         limit: limit,
         search: search,
+        category: search.trim() ? "" : category,
       });
     }, 500);
 
@@ -61,6 +88,21 @@ const Products = () => {
       clearTimeout(timer);
     };
   }, [search]);
+
+  // Fetch categories
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await getCategories();
+
+        setCategories(response);
+      } catch (err) {
+        console.log(err);
+      }
+    };
+
+    fetchCategories();
+  }, []);
 
   const fetchProducts = async () => {
     try {
@@ -73,13 +115,21 @@ const Products = () => {
 
       let response;
 
-      if (debouncedSearch.trim()) {
+      // Category has priority when selected
+      if (category) {
+        response = await getProductsByCategory(category, {
+          limit: limit,
+          skip: skip,
+        });
+      } else if (debouncedSearch.trim()) {
+        // Search when no category is selected
         response = await searchProducts({
           q: debouncedSearch,
           limit: limit,
           skip: skip,
         });
       } else {
+        // Get all products when there is no search or category
         response = await getProducts({
           limit: limit,
           skip: skip,
@@ -105,6 +155,7 @@ const Products = () => {
           page: totalPages,
           limit: limit,
           search: debouncedSearch,
+          category: category,
         });
 
         return;
@@ -119,9 +170,47 @@ const Products = () => {
     }
   };
 
+  // Fetch products whenever page, limit, search or category changes
   useEffect(() => {
     fetchProducts();
-  }, [page, limit, debouncedSearch]);
+  }, [page, limit, debouncedSearch, category]);
+
+  // Category change
+  const handleCategoryChange = (e) => {
+    const selectedCategory = e.target.value;
+
+    setCategory(selectedCategory);
+
+    // Clear search because DummyJSON
+    // does not support search + category together
+    setSearch("");
+    setDebouncedSearch("");
+
+    // Start from page 1
+    setPage(1);
+    setPageArrayIndex(0);
+
+    // Update URL
+    setSearchParams({
+      page: 1,
+      limit: limit,
+      search: "",
+      category: selectedCategory,
+    });
+  };
+
+  // Search input change
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+
+    setSearch(value);
+
+    // If user starts searching,
+    // clear the selected category
+    if (value.trim()) {
+      setCategory("");
+    }
+  };
 
   // Total number of pages
   const totalPages = Math.ceil(total / limit);
@@ -129,7 +218,7 @@ const Products = () => {
   // Create all page numbers
   const pageNumbers = Array.from(
     { length: totalPages },
-    (_, index) => index + 1
+    (_, index) => index + 1,
   );
 
   // Create arrays of 5 page numbers
@@ -177,6 +266,7 @@ const Products = () => {
       page: 1,
       limit: newLimit,
       search: debouncedSearch,
+      category: category,
     });
   };
 
@@ -189,6 +279,7 @@ const Products = () => {
       page: pageNumber,
       limit: limit,
       search: debouncedSearch,
+      category: category,
     });
   };
 
@@ -202,8 +293,27 @@ const Products = () => {
           type="text"
           placeholder="Search products..."
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={handleSearchChange}
         />
+      </div>
+
+      {/* Category Filter */}
+      <div>
+        <label htmlFor="category">Category: </label>
+
+        <select
+          id="category"
+          value={category}
+          onChange={handleCategoryChange}
+        >
+          <option value="">All Categories</option>
+
+          {categories.map((category) => (
+            <option key={category.slug} value={category.slug}>
+              {category.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Loading state */}
@@ -244,15 +354,9 @@ const Products = () => {
 
           {/* Page size */}
           <div>
-            <label htmlFor="pageSize">
-              Products per page:{" "}
-            </label>
+            <label htmlFor="pageSize">Products per page: </label>
 
-            <select
-              id="pageSize"
-              value={limit}
-              onChange={handleLimitChange}
-            >
+            <select id="pageSize" value={limit} onChange={handleLimitChange}>
               <option value={10}>10</option>
               <option value={20}>20</option>
               <option value={50}>50</option>
@@ -263,10 +367,7 @@ const Products = () => {
           {totalPages > 0 && (
             <div>
               {/* Previous */}
-              <button
-                onClick={handlePrevious}
-                disabled={pageArrayIndex === 0}
-              >
+              <button onClick={handlePrevious} disabled={pageArrayIndex === 0}>
                 Previous
               </button>
 
@@ -284,9 +385,7 @@ const Products = () => {
               {/* Next */}
               <button
                 onClick={handleNext}
-                disabled={
-                  pageArrayIndex === pageArrays.length - 1
-                }
+                disabled={pageArrayIndex === pageArrays.length - 1}
               >
                 Next
               </button>
