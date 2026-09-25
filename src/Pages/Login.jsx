@@ -46,6 +46,8 @@ const Login = () => {
   const submit = async (e) => {
     e.preventDefault();
 
+    if (loading) return;
+
     setErrors({
       ...errors,
       form: "",
