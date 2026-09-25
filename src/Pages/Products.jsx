@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useSearchParams,
+} from "react-router-dom";
+
 import {
   getProducts,
   searchProducts,
@@ -8,7 +13,10 @@ import {
 } from "../api/productApi";
 
 const Products = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams, setSearchParams] =
+    useSearchParams();
+
+  const navigate = useNavigate();
 
   // Helper function to keep URL clean
   const updateUrl = ({
@@ -24,17 +32,14 @@ const Products = () => {
       limit,
     };
 
-    // Add search only when it has a value
     if (search.trim()) {
       params.search = search;
     }
 
-    // Add category only when selected
     if (category) {
       params.category = category;
     }
 
-    // Add sorting only when both values exist
     if (sortBy && order) {
       params.sortBy = sortBy;
       params.order = order;
@@ -47,76 +52,136 @@ const Products = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Read page, limit, search, category and sorting from URL
+  // Read values from URL
   const urlPage = Number(searchParams.get("page"));
   const urlLimit = Number(searchParams.get("limit"));
-  const urlSearch = searchParams.get("search") || "";
-  const urlCategory = searchParams.get("category") || "";
-  const urlSortBy = searchParams.get("sortBy") || "";
-  const urlOrder = searchParams.get("order") || "";
+  const urlSearch =
+    searchParams.get("search") || "";
+  const urlCategory =
+    searchParams.get("category") || "";
+  const urlSortBy =
+    searchParams.get("sortBy") || "";
+  const urlOrder =
+    searchParams.get("order") || "";
 
   // Validate page
-  // Page should be a positive whole number
-  const pageValue = urlPage > 0 && Number.isInteger(urlPage) ? urlPage : 1;
+  const pageValue =
+    urlPage > 0 && Number.isInteger(urlPage)
+      ? urlPage
+      : 1;
 
   // Validate limit
-  // Only 10, 20 and 50 are allowed
-  const limitValue = [10, 20, 50].includes(urlLimit) ? urlLimit : 10;
+  const limitValue = [10, 20, 50].includes(
+    urlLimit,
+  )
+    ? urlLimit
+    : 10;
 
   // Validate sorting
-  // sortBy and order should be a valid pair
-  const validSortBy = ["price", "rating", "title"];
+  const validSortBy = [
+    "price",
+    "rating",
+    "title",
+  ];
+
   const validOrder = ["asc", "desc"];
 
   const isValidSorting =
-    validSortBy.includes(urlSortBy) && validOrder.includes(urlOrder);
+    validSortBy.includes(urlSortBy) &&
+    validOrder.includes(urlOrder);
 
-  const sortByValue = isValidSorting ? urlSortBy : "";
-  const orderValue = isValidSorting ? urlOrder : "";
+  const sortByValue = isValidSorting
+    ? urlSortBy
+    : "";
 
-  const [page, setPage] = useState(pageValue);
-  const [limit, setLimit] = useState(limitValue);
-  const [total, setTotal] = useState(0);
+  const orderValue = isValidSorting
+    ? urlOrder
+    : "";
+
+  const [page, setPage] =
+    useState(pageValue);
+
+  const [limit, setLimit] =
+    useState(limitValue);
+
+  const [total, setTotal] =
+    useState(0);
 
   // Categories
-  const [categories, setCategories] = useState([]);
+  const [categories, setCategories] =
+    useState([]);
 
-  // Used to know when categories are loaded
-  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
+  const [
+    categoriesLoaded,
+    setCategoriesLoaded,
+  ] = useState(false);
 
-  // Selected category
-  const [category, setCategory] = useState(urlCategory);
+  // Category
+  const [category, setCategory] =
+    useState(urlCategory);
 
   // Sorting
-  const [sortBy, setSortBy] = useState(sortByValue);
-  const [order, setOrder] = useState(orderValue);
+  const [sortBy, setSortBy] =
+    useState(sortByValue);
 
-  // Which page-number array is currently visible
-  const [pageArrayIndex, setPageArrayIndex] = useState(
+  const [order, setOrder] =
+    useState(orderValue);
+
+  // Pagination page group
+  const [
+    pageArrayIndex,
+    setPageArrayIndex,
+  ] = useState(
     Math.floor((pageValue - 1) / 5),
   );
 
-  // Search text
-  // If category exists in URL, category gets priority
-  const [search, setSearch] = useState(urlCategory ? "" : urlSearch);
+  // Search
+  const [search, setSearch] =
+    useState(
+      urlCategory ? "" : urlSearch,
+    );
 
-  // Debounced search text
-  const [debouncedSearch, setDebouncedSearch] = useState(
+  // Debounced search
+  const [
+    debouncedSearch,
+    setDebouncedSearch,
+  ] = useState(
     urlCategory ? "" : urlSearch,
   );
 
-  // Used to prevent search debounce from resetting
-  // the page when the component loads from the URL
-  const isFirstSearchRender = useRef(true);
+  // Prevent first search effect
+  // from resetting page
+  const isFirstSearchRender =
+    useRef(true);
 
-  // Used to identify the latest API request
-  // This prevents old responses from overwriting new results
+  // Used to prevent stale API responses
   const requestIdRef = useRef(0);
 
-  // Debounce search
+  // --------------------------------------------------
+  // LOGOUT
+  // --------------------------------------------------
+
+  const handleLogout = () => {
+    localStorage.removeItem(
+      "accessToken",
+    );
+
+    localStorage.removeItem("user");
+
+    navigate("/login", {
+      replace: true,
+    });
+  };
+
+  // --------------------------------------------------
+  // SEARCH DEBOUNCE
+  // --------------------------------------------------
+
   useEffect(() => {
     if (isFirstSearchRender.current) {
-      isFirstSearchRender.current = false;
+      isFirstSearchRender.current =
+        false;
+
       return;
     }
 
@@ -128,16 +193,17 @@ const Products = () => {
         setCategory("");
       }
 
-      // When search changes, always start from page 1
+      // Search always starts from page 1
       setPage(1);
       setPageArrayIndex(0);
 
-      // Update clean URL
       updateUrl({
         page: 1,
         limit: limit,
         search: search,
-        category: search.trim() ? "" : category,
+        category: search.trim()
+          ? ""
+          : category,
         sortBy: sortBy,
         order: order,
       });
@@ -148,101 +214,128 @@ const Products = () => {
     };
   }, [search]);
 
-  // Fetch categories
+  // --------------------------------------------------
+  // FETCH CATEGORIES
+  // --------------------------------------------------
+
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await getCategories();
+    const fetchCategories =
+      async () => {
+        try {
+          const response =
+            await getCategories();
 
-        setCategories(response);
+          setCategories(response);
 
-        // Check whether category from URL is valid
-        const isValidCategory = response.some(
-          (item) => item.slug === urlCategory,
-        );
+          // Check category from URL
+          const isValidCategory =
+            response.some(
+              (item) =>
+                item.slug ===
+                urlCategory,
+            );
 
-        // If category exists in URL but is invalid
-        if (urlCategory && !isValidCategory) {
-          setCategory("");
+          // Invalid category
+          if (
+            urlCategory &&
+            !isValidCategory
+          ) {
+            setCategory("");
 
-          // If category is invalid, allow search from URL
-          if (urlSearch) {
-            setSearch(urlSearch);
-            setDebouncedSearch(urlSearch);
+            if (urlSearch) {
+              setSearch(urlSearch);
+              setDebouncedSearch(
+                urlSearch,
+              );
+            }
+
+            updateUrl({
+              page: pageValue,
+              limit: limitValue,
+              search: urlSearch,
+              category: "",
+              sortBy: sortByValue,
+              order: orderValue,
+            });
           }
 
-          // Update URL without invalid category
-          updateUrl({
-            page: pageValue,
-            limit: limitValue,
-            search: urlSearch,
-            category: "",
-            sortBy: sortByValue,
-            order: orderValue,
-          });
+          // Search + category
+          // Category gets priority
+          if (
+            urlCategory &&
+            isValidCategory &&
+            urlSearch
+          ) {
+            setSearch("");
+            setDebouncedSearch("");
+
+            updateUrl({
+              page: pageValue,
+              limit: limitValue,
+              search: "",
+              category: urlCategory,
+              sortBy: sortByValue,
+              order: orderValue,
+            });
+          }
+
+          // Invalid sorting
+          if (
+            (urlSortBy || urlOrder) &&
+            !isValidSorting
+          ) {
+            setSortBy("");
+            setOrder("");
+
+            updateUrl({
+              page: pageValue,
+              limit: limitValue,
+              search:
+                urlCategory &&
+                isValidCategory
+                  ? ""
+                  : urlSearch,
+              category:
+                isValidCategory
+                  ? urlCategory
+                  : "",
+            });
+          }
+
+          setCategoriesLoaded(true);
+        } catch (err) {
+          console.log(err);
+
+          setCategoriesLoaded(true);
         }
-
-        // If both search and category exist,
-        // category gets priority
-        if (urlCategory && isValidCategory && urlSearch) {
-          setSearch("");
-          setDebouncedSearch("");
-
-          // Remove search from URL
-          updateUrl({
-            page: pageValue,
-            limit: limitValue,
-            search: "",
-            category: urlCategory,
-            sortBy: sortByValue,
-            order: orderValue,
-          });
-        }
-
-        // If sorting is invalid, clean it from URL
-        if ((urlSortBy || urlOrder) && !isValidSorting) {
-          setSortBy("");
-          setOrder("");
-
-          updateUrl({
-            page: pageValue,
-            limit: limitValue,
-            search:
-              urlCategory && isValidCategory ? "" : urlSearch,
-            category: isValidCategory ? urlCategory : "",
-          });
-        }
-
-        setCategoriesLoaded(true);
-      } catch (err) {
-        console.log(err);
-        setCategoriesLoaded(true);
-      }
-    };
+      };
 
     fetchCategories();
   }, []);
 
+  // --------------------------------------------------
+  // FETCH PRODUCTS
+  // --------------------------------------------------
+
   const fetchProducts = async () => {
-    // Create a unique ID for this request
-    // Every new request gets a new ID
-    const requestId = ++requestIdRef.current;
+    const requestId =
+      ++requestIdRef.current;
 
     try {
       setLoading(true);
       setError("");
 
-      // Calculate how many products to skip
-      // Math.max ensures skip never becomes negative
-      const skip = Math.max(0, (page - 1) * limit);
+      const skip = Math.max(
+        0,
+        (page - 1) * limit,
+      );
 
-      // Common pagination and sorting parameters
       const params = {
         limit: limit,
         skip: skip,
       };
 
-      // Add sorting parameters only when sorting is selected
+      // Sorting
       if (sortBy && order) {
         params.sortBy = sortBy;
         params.order = order;
@@ -250,41 +343,60 @@ const Products = () => {
 
       let response;
 
-      // Category has priority when selected
+      // Category
       if (category) {
-        response = await getProductsByCategory(category, params);
-      } else if (debouncedSearch.trim()) {
-        // Search when no category is selected
-        response = await searchProducts({
-          q: debouncedSearch,
-          ...params,
-        });
-      } else {
-        // Get all products when there is no search or category
-        response = await getProducts(params);
+        response =
+          await getProductsByCategory(
+            category,
+            params,
+          );
       }
 
-      // If another request started after this request,
-      // ignore this old response
-      if (requestId !== requestIdRef.current) {
+      // Search
+      else if (
+        debouncedSearch.trim()
+      ) {
+        response =
+          await searchProducts({
+            q: debouncedSearch,
+            ...params,
+          });
+      }
+
+      // All products
+      else {
+        response =
+          await getProducts(params);
+      }
+
+      // Ignore old request
+      if (
+        requestId !==
+        requestIdRef.current
+      ) {
         return;
       }
 
-      // Store total products
       setTotal(response.total);
 
-      // Calculate total number of pages
-      const totalPages = Math.ceil(response.total / limit);
+      const totalPages =
+        Math.ceil(
+          response.total / limit,
+        );
 
-      // If current page is greater than available pages
-      if (page > totalPages && totalPages > 0) {
-        // Move to the last available page
+      // Invalid page
+      if (
+        page > totalPages &&
+        totalPages > 0
+      ) {
         setPage(totalPages);
 
-        // Show the page-number array containing the last page
-        setPageArrayIndex(Math.floor((totalPages - 1) / 5));
+        setPageArrayIndex(
+          Math.floor(
+            (totalPages - 1) / 5,
+          ),
+        );
 
-        // Update clean URL with valid page
         updateUrl({
           page: totalPages,
           limit: limit,
@@ -297,24 +409,32 @@ const Products = () => {
         return;
       }
 
-      // Set products only when page is valid
-      setProducts(response.products);
+      setProducts(
+        response.products,
+      );
     } catch (err) {
-      // Ignore errors from old requests too
-      if (requestId !== requestIdRef.current) {
+      if (
+        requestId !==
+        requestIdRef.current
+      ) {
         return;
       }
 
-      setError(err.message || "Failed to load products");
+      setError(
+        err.message ||
+          "Failed to load products",
+      );
     } finally {
-      // Only the latest request controls loading state
-      if (requestId === requestIdRef.current) {
+      if (
+        requestId ===
+        requestIdRef.current
+      ) {
         setLoading(false);
       }
     }
   };
 
-  // Fetch products whenever page, limit, search, category or sorting changes
+  // Fetch whenever filters/pagination change
   useEffect(() => {
     if (!categoriesLoaded) {
       return;
@@ -331,302 +451,882 @@ const Products = () => {
     order,
   ]);
 
-  // Category change
-  const handleCategoryChange = (e) => {
-    const selectedCategory = e.target.value;
+  // --------------------------------------------------
+  // CATEGORY
+  // --------------------------------------------------
 
-    setCategory(selectedCategory);
+  const handleCategoryChange = (
+    e,
+  ) => {
+    const selectedCategory =
+      e.target.value;
 
-    // Clear search because DummyJSON
-    // does not support search + category together
+    setCategory(
+      selectedCategory,
+    );
+
+    // Clear search
     setSearch("");
     setDebouncedSearch("");
 
-    // Start from page 1
+    // Start page 1
     setPage(1);
     setPageArrayIndex(0);
 
-    // Update clean URL
     updateUrl({
       page: 1,
       limit: limit,
       search: "",
-      category: selectedCategory,
+      category:
+        selectedCategory,
       sortBy: sortBy,
       order: order,
     });
   };
 
-  // Search input change
-  const handleSearchChange = (e) => {
+  // --------------------------------------------------
+  // SEARCH
+  // --------------------------------------------------
+
+  const handleSearchChange = (
+    e,
+  ) => {
     const value = e.target.value;
 
     setSearch(value);
 
-    // If user starts searching,
-    // clear the selected category
+    // Clear category when searching
     if (value.trim()) {
       setCategory("");
     }
   };
 
-  // Sorting change
-  const handleSortChange = (e) => {
-    const selectedSort = e.target.value;
+  // --------------------------------------------------
+  // SORT
+  // --------------------------------------------------
 
-    // Default option
+  const handleSortChange = (
+    e,
+  ) => {
+    const selectedSort =
+      e.target.value;
+
+    // Default sorting
     if (!selectedSort) {
       setSortBy("");
       setOrder("");
       setPage(1);
       setPageArrayIndex(0);
 
-      // Update URL without sorting
       updateUrl({
         page: 1,
         limit: limit,
-        search: debouncedSearch,
+        search:
+          debouncedSearch,
         category: category,
       });
 
       return;
     }
 
-    // Split value into sortBy and order
-    const [newSortBy, newOrder] = selectedSort.split("-");
+    const [
+      newSortBy,
+      newOrder,
+    ] = selectedSort.split("-");
 
     setSortBy(newSortBy);
     setOrder(newOrder);
 
-    // Start from page 1
     setPage(1);
     setPageArrayIndex(0);
 
-    // Update clean URL
     updateUrl({
       page: 1,
       limit: limit,
-      search: debouncedSearch,
+      search:
+        debouncedSearch,
       category: category,
       sortBy: newSortBy,
       order: newOrder,
     });
   };
 
-  // Total number of pages
-  const totalPages = Math.ceil(total / limit);
+  // --------------------------------------------------
+  // PAGINATION
+  // --------------------------------------------------
 
-  // Create all page numbers
-  const pageNumbers = Array.from(
-    { length: totalPages },
-    (_, index) => index + 1,
-  );
+  const totalPages =
+    Math.ceil(total / limit);
 
-  // Create arrays of 5 page numbers
+  const pageNumbers =
+    Array.from(
+      { length: totalPages },
+      (_, index) =>
+        index + 1,
+    );
+
   const pageArrays = [];
 
-  for (let i = 0; i < pageNumbers.length; i += 5) {
-    pageArrays.push(pageNumbers.slice(i, i + 5));
+  for (
+    let i = 0;
+    i < pageNumbers.length;
+    i += 5
+  ) {
+    pageArrays.push(
+      pageNumbers.slice(
+        i,
+        i + 5,
+      ),
+    );
   }
 
-  // Current page-number array
-  const visiblePages = pageArrays[pageArrayIndex] || [];
+  const visiblePages =
+    pageArrays[
+      pageArrayIndex
+    ] || [];
 
-  // Product range currently being displayed
-  const startProduct = total > 0 ? (page - 1) * limit + 1 : 0;
-  const endProduct = Math.min(page * limit, total);
+  // Product range
+  const startProduct =
+    total > 0
+      ? (page - 1) * limit + 1
+      : 0;
 
-  // Previous array
-  const handlePrevious = () => {
-    if (pageArrayIndex > 0) {
-      setPageArrayIndex(pageArrayIndex - 1);
-    }
-  };
+  const endProduct =
+    Math.min(
+      page * limit,
+      total,
+    );
 
-  // Next array
+  // Previous page group
+  const handlePrevious =
+    () => {
+      if (pageArrayIndex > 0) {
+        setPageArrayIndex(
+          pageArrayIndex - 1,
+        );
+      }
+    };
+
+  // Next page group
   const handleNext = () => {
-    if (pageArrayIndex < pageArrays.length - 1) {
-      setPageArrayIndex(pageArrayIndex + 1);
+    if (
+      pageArrayIndex <
+      pageArrays.length - 1
+    ) {
+      setPageArrayIndex(
+        pageArrayIndex + 1,
+      );
     }
   };
 
-  // Page size change
-  const handleLimitChange = (e) => {
-    const newLimit = Number(e.target.value);
+  // Page size
+  const handleLimitChange = (
+    e,
+  ) => {
+    const newLimit = Number(
+      e.target.value,
+    );
 
     setLimit(newLimit);
-
-    // Start from page 1
     setPage(1);
-
-    // Show first page-number array
     setPageArrayIndex(0);
 
-    // Update clean URL
     updateUrl({
       page: 1,
       limit: newLimit,
-      search: debouncedSearch,
+      search:
+        debouncedSearch,
       category: category,
       sortBy: sortBy,
       order: order,
     });
   };
 
-  // Page number click
-  const handlePageChange = (pageNumber) => {
+  // Page number
+  const handlePageChange = (
+    pageNumber,
+  ) => {
     setPage(pageNumber);
 
-    // Update clean URL
     updateUrl({
       page: pageNumber,
       limit: limit,
-      search: debouncedSearch,
+      search:
+        debouncedSearch,
       category: category,
       sortBy: sortBy,
       order: order,
     });
   };
 
+  // --------------------------------------------------
+  // UI
+  // --------------------------------------------------
+
   return (
-    <div>
-      <h2>Products</h2>
-
-      {/* Search */}
-      <div>
-        <input
-          type="text"
-          placeholder="Search products..."
-          value={search}
-          onChange={handleSearchChange}
-        />
-      </div>
-
-      {/* Category Filter */}
-      <div>
-        <label htmlFor="category">Category: </label>
-
-        <select
-          id="category"
-          value={category}
-          onChange={handleCategoryChange}
-        >
-          <option value="">All Categories</option>
-
-          {categories.map((category) => (
-            <option key={category.slug} value={category.slug}>
-              {category.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Sorting */}
-      <div>
-        <label htmlFor="sort">Sort By: </label>
-
-        <select
-          id="sort"
-          value={sortBy && order ? `${sortBy}-${order}` : ""}
-          onChange={handleSortChange}
-        >
-          <option value="">Default</option>
-
-          <option value="price-asc">Price: Low to High</option>
-          <option value="price-desc">Price: High to Low</option>
-
-          <option value="rating-asc">Rating: Low to High</option>
-          <option value="rating-desc">Rating: High to Low</option>
-
-          <option value="title-asc">Title: A to Z</option>
-          <option value="title-desc">Title: Z to A</option>
-        </select>
-      </div>
-
-      {/* Loading state */}
-      {loading && <p>Loading...</p>}
-
-      {/* Error state */}
-      {error && <p>{error}</p>}
-
-      {!loading && !error && (
-        <>
-          {/* Product List */}
+    <div className="bg-light min-vh-100">
+      {/* Header */}
+      <nav className="navbar bg-white border-bottom">
+        <div className="container">
           <div>
-            {products.length > 0 ? (
-              products.map((product) => (
-                <div key={product.id}>
-                  <h3>{product.title}</h3>
+            <h4 className="mb-0 fw-bold">
+              Product Dashboard
+            </h4>
 
-                  <p>Category: {product.category}</p>
-
-                  <p>Price: ${product.price}</p>
-
-                  <p>Rating: {product.rating}</p>
-
-                  <p>Stock: {product.stock}</p>
-                </div>
-              ))
-            ) : (
-              <p>No products found.</p>
-            )}
+            <small className="text-muted">
+              Manage your products
+            </small>
           </div>
 
-          {/* Showing range */}
+          {/* Logout */}
+          <button
+            type="button"
+            className="btn btn-outline-danger btn-sm"
+            onClick={handleLogout}
+          >
+            Logout
+          </button>
+        </div>
+      </nav>
+
+      <main className="container py-4 py-md-5">
+        {/* Page heading */}
+        <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
           <div>
-            <p>
-              Showing {startProduct}–{endProduct} of {total}
+            <h1 className="h3 fw-bold mb-1">
+              Products
+            </h1>
+
+            <p className="text-muted mb-0">
+              Browse and manage products
             </p>
           </div>
 
-          {/* Page size */}
-          <div>
-            <label htmlFor="pageSize">Products per page: </label>
+          {/* Add Product */}
+          <Link
+            to="/products/new"
+            className="btn btn-dark"
+          >
+            + Add Product
+          </Link>
+        </div>
 
-            <select id="pageSize" value={limit} onChange={handleLimitChange}>
-              <option value={10}>10</option>
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-            </select>
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 0 && (
-            <div>
-              {/* Previous */}
-              <button onClick={handlePrevious} disabled={pageArrayIndex === 0}>
-                Previous
-              </button>
-
-              {/* Page numbers */}
-              {visiblePages.map((pageNumber) => (
-                <button
-                  key={pageNumber}
-                  onClick={() => handlePageChange(pageNumber)}
-                  disabled={page === pageNumber}
+        {/* Filters */}
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-body p-3 p-md-4">
+            <div className="row g-3">
+              {/* Search */}
+              <div className="col-12 col-md-5">
+                <label
+                  htmlFor="search"
+                  className="form-label fw-semibold"
                 >
-                  {pageNumber}
-                </button>
-              ))}
+                  Search
+                </label>
 
-              {/* Next */}
-              <button
-                onClick={handleNext}
-                disabled={pageArrayIndex === pageArrays.length - 1}
-              >
-                Next
-              </button>
+                <input
+                  id="search"
+                  type="text"
+                  className="form-control"
+                  placeholder="Search products..."
+                  value={search}
+                  onChange={
+                    handleSearchChange
+                  }
+                />
+              </div>
 
-              {/* Current page information */}
-              <div>
-                <p>
-                  Page {page} of {totalPages}
-                </p>
+              {/* Category */}
+              <div className="col-12 col-md-3">
+                <label
+                  htmlFor="category"
+                  className="form-label fw-semibold"
+                >
+                  Category
+                </label>
+
+                <select
+                  id="category"
+                  className="form-select"
+                  value={category}
+                  onChange={
+                    handleCategoryChange
+                  }
+                >
+                  <option value="">
+                    All Categories
+                  </option>
+
+                  {categories.map(
+                    (
+                      categoryItem,
+                    ) => (
+                      <option
+                        key={
+                          categoryItem.slug
+                        }
+                        value={
+                          categoryItem.slug
+                        }
+                      >
+                        {
+                          categoryItem.name
+                        }
+                      </option>
+                    ),
+                  )}
+                </select>
+              </div>
+
+              {/* Sorting */}
+              <div className="col-12 col-md-4">
+                <label
+                  htmlFor="sort"
+                  className="form-label fw-semibold"
+                >
+                  Sort By
+                </label>
+
+                <select
+                  id="sort"
+                  className="form-select"
+                  value={
+                    sortBy &&
+                    order
+                      ? `${sortBy}-${order}`
+                      : ""
+                  }
+                  onChange={
+                    handleSortChange
+                  }
+                >
+                  <option value="">
+                    Default
+                  </option>
+
+                  <option value="price-asc">
+                    Price: Low to
+                    High
+                  </option>
+
+                  <option value="price-desc">
+                    Price: High to
+                    Low
+                  </option>
+
+                  <option value="rating-asc">
+                    Rating: Low to
+                    High
+                  </option>
+
+                  <option value="rating-desc">
+                    Rating: High to
+                    Low
+                  </option>
+
+                  <option value="title-asc">
+                    Title: A to Z
+                  </option>
+
+                  <option value="title-desc">
+                    Title: Z to A
+                  </option>
+                </select>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Loading */}
+        {loading && (
+          <div className="card border-0 shadow-sm">
+            <div className="card-body text-center py-5">
+              <div
+                className="spinner-border mb-3"
+                role="status"
+              >
+                <span className="visually-hidden">
+                  Loading...
+                </span>
+              </div>
+
+              <p className="text-muted mb-0">
+                Loading products...
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Error */}
+        {!loading && error && (
+          <div className="alert alert-danger">
+            <h6 className="alert-heading">
+              Unable to load products
+            </h6>
+
+            <p className="mb-3">
+              {error}
+            </p>
+
+            <button
+              className="btn btn-danger btn-sm"
+              onClick={
+                fetchProducts
+              }
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Products */}
+        {!loading &&
+          !error && (
+            <>
+              {products.length >
+              0 ? (
+                <>
+                  {/* Desktop Table */}
+                  <div className="card border-0 shadow-sm d-none d-md-block">
+                    <div className="table-responsive">
+                      <table className="table table-hover align-middle mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th className="px-4 py-3">
+                              Product
+                            </th>
+
+                            <th>
+                              Category
+                            </th>
+
+                            <th>
+                              Price
+                            </th>
+
+                            <th>
+                              Rating
+                            </th>
+
+                            <th>
+                              Stock
+                            </th>
+
+                            <th className="text-end px-4">
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          {products.map(
+                            (
+                              product,
+                            ) => (
+                              <tr
+                                key={
+                                  product.id
+                                }
+                              >
+                                <td className="px-4">
+                                  <div className="d-flex align-items-center gap-3">
+                                    <img
+                                      src={
+                                        product.thumbnail
+                                      }
+                                      alt={
+                                        product.title
+                                      }
+                                      className="rounded border"
+                                      style={{
+                                        width:
+                                          "60px",
+                                        height:
+                                          "60px",
+                                        objectFit:
+                                          "contain",
+                                      }}
+                                    />
+
+                                    <div>
+                                      <div className="fw-semibold">
+                                        {
+                                          product.title
+                                        }
+                                      </div>
+
+                                      {product.brand && (
+                                        <small className="text-muted">
+                                          {
+                                            product.brand
+                                          }
+                                        </small>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+
+                                <td>
+                                  <span className="badge text-bg-light border">
+                                    {
+                                      product.category
+                                    }
+                                  </span>
+                                </td>
+
+                                <td className="fw-semibold">
+                                  $
+                                  {
+                                    product.price
+                                  }
+                                </td>
+
+                                <td>
+                                  <span className="badge bg-warning text-dark">
+                                    ★{" "}
+                                    {
+                                      product.rating
+                                    }
+                                  </span>
+                                </td>
+
+                                <td>
+                                  <span
+                                    className={
+                                      product.stock >
+                                      0
+                                        ? "text-success"
+                                        : "text-danger"
+                                    }
+                                  >
+                                    {
+                                      product.stock
+                                    }
+                                  </span>
+                                </td>
+
+                                {/* Actions */}
+                                <td className="text-end px-4">
+                                  <div className="d-flex justify-content-end gap-2">
+                                    {/* View */}
+                                    <Link
+                                      to={`/products/${product.id}`}
+                                      className="btn btn-sm btn-outline-dark"
+                                    >
+                                      View
+                                    </Link>
+
+                                    {/* Edit */}
+                                    <Link
+                                      to="/products/new"
+                                      className="btn btn-sm btn-outline-warning"
+                                    >
+                                      Edit
+                                    </Link>
+
+                                    {/* Delete - logic will be added later */}
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm btn-outline-danger"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ),
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Mobile Cards */}
+                  <div className="d-md-none">
+                    <div className="row g-3">
+                      {products.map(
+                        (
+                          product,
+                        ) => (
+                          <div
+                            className="col-12"
+                            key={
+                              product.id
+                            }
+                          >
+                            <div className="card border-0 shadow-sm h-100">
+                              <div className="row g-0">
+                                {/* Image */}
+                                <div className="col-4">
+                                  <div
+                                    className="h-100 d-flex align-items-center justify-content-center bg-white rounded-start"
+                                    style={{
+                                      minHeight:
+                                        "160px",
+                                    }}
+                                  >
+                                    <img
+                                      src={
+                                        product.thumbnail
+                                      }
+                                      alt={
+                                        product.title
+                                      }
+                                      className="img-fluid p-2"
+                                      style={{
+                                        maxHeight:
+                                          "150px",
+                                        objectFit:
+                                          "contain",
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Content */}
+                                <div className="col-8">
+                                  <div className="card-body p-3">
+                                    <span className="badge text-bg-light border mb-2">
+                                      {
+                                        product.category
+                                      }
+                                    </span>
+
+                                    <h5 className="card-title fw-semibold mb-2">
+                                      {
+                                        product.title
+                                      }
+                                    </h5>
+
+                                    <div className="d-flex align-items-center gap-2 mb-2">
+                                      <span className="fw-bold">
+                                        $
+                                        {
+                                          product.price
+                                        }
+                                      </span>
+
+                                      <span className="badge bg-warning text-dark">
+                                        ★{" "}
+                                        {
+                                          product.rating
+                                        }
+                                      </span>
+                                    </div>
+
+                                    <p className="text-muted small mb-3">
+                                      Stock:{" "}
+                                      <span
+                                        className={
+                                          product.stock >
+                                          0
+                                            ? "text-success fw-semibold"
+                                            : "text-danger fw-semibold"
+                                        }
+                                      >
+                                        {
+                                          product.stock
+                                        }
+                                      </span>
+                                    </p>
+
+                                    {/* Mobile Actions */}
+                                    <div className="d-flex gap-2">
+                                      {/* View */}
+                                      <Link
+                                        to={`/products/${product.id}`}
+                                        className="btn btn-sm btn-outline-dark flex-fill"
+                                      >
+                                        View
+                                      </Link>
+
+                                      {/* Edit */}
+                                      <Link
+                                        to={`/products/edit/${product.id}`}
+                                        className="btn btn-sm btn-outline-warning flex-fill"
+                                      >
+                                        Edit
+                                      </Link>
+
+                                      {/* Delete - logic will be added later */}
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-danger flex-fill"
+                                      >
+                                        Delete
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                /* Empty state */
+                <div className="card border-0 shadow-sm">
+                  <div className="card-body text-center py-5">
+                    <h5 className="fw-semibold">
+                      No products
+                      found
+                    </h5>
+
+                    <p className="text-muted mb-0">
+                      Try changing
+                      your search
+                      or filters.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Pagination */}
+              {products.length >
+                0 && (
+                <div className="card border-0 shadow-sm mt-4">
+                  <div className="card-body p-3">
+                    <div className="d-flex flex-column flex-lg-row justify-content-between align-items-center gap-3">
+                      {/* Showing */}
+                      <div className="text-muted small text-center text-lg-start">
+                        Showing{" "}
+                        <strong>
+                          {
+                            startProduct
+                          }
+                        </strong>
+                        –
+                        <strong>
+                          {
+                            endProduct
+                          }
+                        </strong>{" "}
+                        of{" "}
+                        <strong>
+                          {total}
+                        </strong>
+                      </div>
+
+                      {/* Pagination */}
+                      {totalPages >
+                        0 && (
+                        <div className="d-flex align-items-center gap-1 flex-wrap justify-content-center">
+                          <button
+                            className="btn btn-sm btn-outline-secondary"
+                            onClick={
+                              handlePrevious
+                            }
+                            disabled={
+                              pageArrayIndex ===
+                              0
+                            }
+                          >
+                            Previous
+                          </button>
+
+                          {visiblePages.map(
+                            (
+                              pageNumber,
+                            ) => (
+                              <button
+                                key={
+                                  pageNumber
+                                }
+                                className={`btn btn-sm ${
+                                  page ===
+                                  pageNumber
+                                    ? "btn-dark"
+                                    : "btn-outline-secondary"
+                                }`}
+                                onClick={() =>
+                                  handlePageChange(
+                                    pageNumber,
+                                  )
+                                }
+                              >
+                                {
+                                  pageNumber
+                                }
+                              </button>
+                            ),
+                          )}
+
+                          <button
+                            className="btn btn-sm btn-outline-secondary"
+                            onClick={
+                              handleNext
+                            }
+                            disabled={
+                              pageArrayIndex ===
+                              pageArrays.length -
+                                1
+                            }
+                          >
+                            Next
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Page size */}
+                      <div className="d-flex align-items-center gap-2">
+                        <label
+                          htmlFor="pageSize"
+                          className="small text-muted"
+                        >
+                          Per
+                          page:
+                        </label>
+
+                        <select
+                          id="pageSize"
+                          className="form-select form-select-sm"
+                          style={{
+                            width:
+                              "75px",
+                          }}
+                          value={
+                            limit
+                          }
+                          onChange={
+                            handleLimitChange
+                          }
+                        >
+                          <option value={10}>
+                            10
+                          </option>
+
+                          <option value={20}>
+                            20
+                          </option>
+
+                          <option value={50}>
+                            50
+                          </option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Page information */}
+                    {totalPages >
+                      0 && (
+                      <div className="text-center text-muted small mt-3">
+                        Page{" "}
+                        {page}{" "}
+                        of{" "}
+                        {
+                          totalPages
+                        }
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
           )}
-        </>
-      )}
+      </main>
     </div>
   );
 };
